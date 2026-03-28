@@ -1,1 +1,0 @@
-# simforge-claude-plugin

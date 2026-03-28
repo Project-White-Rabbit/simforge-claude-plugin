@@ -1,0 +1,29 @@
+{
+  "name": "simforge-claude-plugin",
+  "version": "0.1.0",
+  "description": "Simforge LLM evaluation tools for Claude Code — trace inspection, grader management, and diagnostics via MCP",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "claude-code",
+    "simforge",
+    "llm",
+    "evaluation",
+    "tracing",
+    "mcp"
+  ],
+  "author": "Simforge",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.0"
+  }
+}

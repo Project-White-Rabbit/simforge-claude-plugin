@@ -1,0 +1,23 @@
+{
+  "name": "simforge",
+  "owner": {
+    "name": "Simforge"
+  },
+  "metadata": {
+    "description": "Simforge LLM evaluation tools for Claude Code — trace inspection, grader management, and diagnostics via MCP.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "simforge",
+      "source": "./",
+      "description": "Simforge LLM evaluation tools for Claude Code — trace inspection, grader management, and diagnostics via MCP.",
+      "version": "0.1.0",
+      "homepage": "https://github.com/Project-White-Rabbit/simforge-claude-plugin",
+      "repository": "https://github.com/Project-White-Rabbit/simforge-claude-plugin",
+      "license": "MIT",
+      "category": "developer-tools",
+      "tags": ["simforge", "llm", "evaluation", "tracing", "mcp"]
+    }
+  ]
+}
