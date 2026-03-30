@@ -1,13 +1,27 @@
 ---
-description: Set up Simforge tracing — authenticate and instrument your codebase
+description: Set up Simforge tracing — authenticate, instrument, and create replay scripts
 allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write"]
+argument-hint: [all|login|instrument|replay]
 ---
 
 # Simforge Setup
 
-This skill handles the full Simforge onboarding: authentication and SDK instrumentation.
+This skill handles Simforge onboarding in three phases: **login**, **instrument**, and **replay**. Run them individually or all at once.
 
-## Step 1: Check Authentication
+| Invocation | Action |
+|---|---|
+| `/simforge:setup` or `/simforge:setup all` | Run full setup (login → instrument → replay) |
+| `/simforge:setup login` | Authenticate and retrieve API key |
+| `/simforge:setup instrument` | Instrument AI workflows with Simforge tracing |
+| `/simforge:setup replay` | Create or update replay scripts for instrumented workflows |
+
+---
+
+## Login
+
+Authenticate with Simforge and retrieve the API key.
+
+### Step 1: Check Authentication
 
 Run the status check:
 
@@ -21,9 +35,9 @@ If the output says **"not authenticated"**, run the login script:
 node "${CLAUDE_PLUGIN_ROOT}/dist/commands/login.js"
 ```
 
-After successful login, confirm to the user and continue to Step 2.
+After successful login, confirm to the user and continue.
 
-## Step 2: Retrieve the API Key
+### Step 2: Retrieve the API Key
 
 Read the stored credentials to get the API key:
 
@@ -33,7 +47,15 @@ node -e "const fs = require('fs'), os = require('os'), p = require('path').join(
 
 Use this key for the `SIMFORGE_API_KEY` environment variable.
 
-## Step 3: Check Existing Instrumentation
+**If running `login` only**, stop here and report the result.
+
+---
+
+## Instrument
+
+Instrument the codebase with Simforge tracing. Requires authentication (run `login` first if not authenticated).
+
+### Step 1: Check Existing Instrumentation
 
 Before instrumenting, check whether Simforge is already set up in this codebase.
 
@@ -48,34 +70,10 @@ Before instrumenting, check whether Simforge is already set up in this codebase.
    - Identify any AI workflows that are NOT yet instrumented
    - Ask the user: "I found existing Simforge instrumentation for these trace functions: [list]. There are [N] additional AI workflows that could be instrumented: [list]. Want me to instrument any of these?"
    - If the user says yes, proceed to the instrumentation prompt below for just the new workflows
-   - If the user says no or everything is covered, skip to Step 4 (Replay Script)
+   - If the user says no or everything is covered, skip to the end
 4. **If no instrumentation exists**, proceed to the full instrumentation prompt below.
 
-## Step 4: Replay Script Check
-
-After instrumentation is complete (or was already present), check for a replay script. Replay scripts let the team regression-test any trace function against production data with one command — they use `simforge.replay()` / `client.replay()` to fetch historical traces, re-run them through the current code, and report old vs. new outputs side-by-side.
-
-For replay API details, refer to the SDK documentation for the detected language (linked in Step 5).
-
-1. **Search for an existing replay script:**
-   - Look for files matching `scripts/replay.*`, `scripts/*replay*`, or any file that imports `simforge.replay` / `client.replay`
-2. **If a replay script exists:**
-   - Read it and extract the trace function keys / pipelines it covers
-   - Compare against all trace function keys in the codebase
-   - If any keys are missing: "Your replay script covers [X, Y] but is missing [Z]. Want me to add the missing functions?"
-   - If all keys are covered: report that the replay script is up to date and move on
-3. **If no replay script exists:**
-   - Ask: "Want me to create a replay script? It lets you regression-test any trace function against production data with one command."
-   - If yes, create the script. The script should:
-     - Accept a pipeline name as a CLI argument
-     - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
-     - Map pipeline names to trace function keys and their replay functions
-     - Use a per-pipeline replay function for each trace function (important because replay deserializes historical inputs — if the function signature doesn't match the raw input shape, the wrapper reshapes arguments)
-     - Call `simforge.replay()` / `client.replay()` and print results with delta summaries (original count → new count)
-     - Print a summary (total replayed, same, changed, errors) and the test run URL
-     - Live in a `scripts/` directory (or the project's existing scripts location)
-
-## Step 5: Instrument the Codebase (if needed)
+### Step 2: Instrument the Codebase
 
 Follow the instrumentation prompt below. This is the same flow used by the Simforge setup page.
 
@@ -86,15 +84,13 @@ For detailed SDK documentation, refer to:
 - **Go SDK**: https://docs.simforge.goharvest.ai/go-sdk
 - **Full documentation**: https://docs.simforge.goharvest.ai/introduction
 
----
-
-## Instrumentation Prompt
+### Instrumentation Prompt
 
 Simforge captures every AI function call — inputs, outputs, and errors — so you can see exactly what your AI is doing and discover what's going wrong. The goal is to have enough context in each trace to tell whether a call succeeded or failed, and why.
 
 Instrument this codebase with Simforge tracing:
 
-1. Use the API key from Step 2 above.
+1. Use the API key from the Login phase (or retrieve it now if already authenticated).
 2. Install the SDK (if not already installed) and set the SIMFORGE_API_KEY environment variable
 3. Read the SDK documentation for the detected language (linked above). Read it carefully.
 4. Read the codebase to understand the architecture and identify ALL AI workflows — every place the app makes LLM calls, runs agents, or makes AI-driven decisions
@@ -128,5 +124,51 @@ Trace function: "my-agent"
 
 7. Instrument the code following the SDK documentation exactly. Do NOT modify the original function's logic in any way — instrumentation is purely additive. Never change behavior, arguments, return values, error handling, variable names, types, control flow, or code structure. The only changes should be adding tracing calls around existing code.
 8. Tell the user how to run the app to generate the first trace — give them the exact command(s). Do NOT run the app yourself.
-9. Show a tree diagram of what you instrumented (same format as step 6), explain what visibility each trace gives you, and ask: "Want me to instrument another workflow, or all remaining workflows?" — then repeat steps 6–9.
-10. After all instrumentation is done, return to Step 4 (Replay Script Check) to ensure the replay script is set up.
+9. Show a tree diagram of what you instrumented (same format as step 6), explain what visibility each trace gives you, and ask: "Want me to instrument another workflow, or all remaining workflows?" — then repeat steps 5–9.
+
+**If running `instrument` only**, stop here after instrumentation is complete.
+
+---
+
+## Replay
+
+Create or update replay scripts for instrumented trace functions. Requires instrumentation to be present in the codebase.
+
+Replay scripts let the team regression-test any trace function against production data with one command — they use `simforge.replay()` / `client.replay()` to fetch historical traces, re-run them through the current code, and report old vs. new outputs side-by-side.
+
+For replay API details, refer to the SDK documentation for the detected language (linked in the Instrument section).
+
+### Step 1: Search for an existing replay script
+
+- Look for files matching `scripts/replay.*`, `scripts/*replay*`, or any file that imports `simforge.replay` / `client.replay`
+
+### Step 2: If a replay script exists
+
+- Read it and extract the trace function keys / pipelines it covers
+- Compare against all trace function keys in the codebase
+- If any keys are missing: "Your replay script covers [X, Y] but is missing [Z]. Want me to add the missing functions?"
+- If all keys are covered: report that the replay script is up to date
+
+### Step 3: If no replay script exists
+
+- Ask: "Want me to create a replay script? It lets you regression-test any trace function against production data with one command."
+- If yes, create the script. The script should:
+  - Accept a pipeline name as a CLI argument
+  - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
+  - Map pipeline names to trace function keys and their replay functions
+  - Use a per-pipeline replay function for each trace function (important because replay deserializes historical inputs — if the function signature doesn't match the raw input shape, the wrapper reshapes arguments)
+  - Call `simforge.replay()` / `client.replay()` and print results with delta summaries (original count → new count)
+  - Print a summary (total replayed, same, changed, errors) and the test run URL
+  - Live in a `scripts/` directory (or the project's existing scripts location)
+
+---
+
+## Full Setup Flow
+
+When running `/simforge:setup` or `/simforge:setup all`, execute all three phases in order:
+
+1. **Login** — authenticate and get API key
+2. **Instrument** — discover and instrument AI workflows
+3. **Replay** — create or update replay scripts for all instrumented trace functions
+
+After all three phases complete, give a summary of what was set up.
