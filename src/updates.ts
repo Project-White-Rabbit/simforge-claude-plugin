@@ -35,7 +35,7 @@ function isNewer(latest: string, current: string): boolean {
   return lPatch > cPatch
 }
 
-export interface UpdateStatus {
+interface UpdateStatus {
   current: string
   latest: string | null
   updateAvailable: boolean
@@ -76,11 +76,6 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
   }
 }
 
-export function formatUpdateMessage(
-  current: string,
-  latest: string,
-): string {
+export function formatUpdateMessage(latest: string): string {
   return `v${latest} available — run /simforge:update to update`
 }
-
-export { REPO }

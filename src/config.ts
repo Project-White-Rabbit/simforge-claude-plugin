@@ -2,7 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-export interface SimforgeConfig {
+interface SimforgeConfig {
   serviceUrl: string
   apiKey: string | null
   verbose: boolean
@@ -50,10 +50,16 @@ function getApiKey(): string | null {
 }
 
 function getVerbose(): boolean {
-  if (process.env.SIMFORGE_VERBOSE === "true" || process.env.SIMFORGE_VERBOSE === "1") {
+  if (
+    process.env.SIMFORGE_VERBOSE === "true" ||
+    process.env.SIMFORGE_VERBOSE === "1"
+  ) {
     return true
   }
-  if (process.env.SIMFORGE_VERBOSE === "false" || process.env.SIMFORGE_VERBOSE === "0") {
+  if (
+    process.env.SIMFORGE_VERBOSE === "false" ||
+    process.env.SIMFORGE_VERBOSE === "0"
+  ) {
     return false
   }
   const config = getConfigData()
@@ -61,7 +67,10 @@ function getVerbose(): boolean {
 }
 
 function getDebug(): boolean {
-  if (process.env.SIMFORGE_DEBUG === "true" || process.env.SIMFORGE_DEBUG === "1") {
+  if (
+    process.env.SIMFORGE_DEBUG === "true" ||
+    process.env.SIMFORGE_DEBUG === "1"
+  ) {
     return true
   }
   const config = getConfigData()
@@ -97,4 +106,4 @@ export function hasCredentials(): boolean {
   return getApiKey() !== null
 }
 
-export { GLOBAL_CONFIG_DIR as CONFIG_DIR, GLOBAL_CREDENTIALS_FILE as CREDENTIALS_FILE }
+export { GLOBAL_CREDENTIALS_FILE as CREDENTIALS_FILE }

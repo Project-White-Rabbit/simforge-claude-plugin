@@ -53,7 +53,6 @@ export async function checkForUpdate() {
         autoUpdateEnabled: isAutoUpdateEnabled(),
     };
 }
-export function formatUpdateMessage(current, latest) {
+export function formatUpdateMessage(latest) {
     return `v${latest} available — run /simforge:update to update`;
 }
-export { REPO };

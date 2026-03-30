@@ -141,13 +141,17 @@ async function main() {
 
       if (status === "saved") {
         if (labeled && total) {
-          console.log(`Labeling complete: ${labeled}/${total} traces labeled (last: ${decision ?? "labeled"})`)
+          console.log(
+            `Labeling complete: ${labeled}/${total} traces labeled (last: ${decision ?? "labeled"})`,
+          )
         } else {
           console.log(`Labeling complete: ${decision ?? "labeled"}`)
         }
       } else {
         if (labeled && total && Number(labeled) > 0) {
-          console.log(`Labeling ended early: ${labeled}/${total} traces labeled.`)
+          console.log(
+            `Labeling ended early: ${labeled}/${total} traces labeled.`,
+          )
         } else {
           console.log("Labeling ended without saving.")
         }
@@ -168,7 +172,9 @@ async function main() {
 
   server.listen(port, () => {
     const firstTraceId = traceIds[0]
-    const labelUrl = new URL(`${config.serviceUrl}/labeling/${encodeURIComponent(firstTraceId)}`)
+    const labelUrl = new URL(
+      `${config.serviceUrl}/labeling/${encodeURIComponent(firstTraceId)}`,
+    )
     labelUrl.searchParams.set("callbackPort", String(port))
     if (traceIds.length > 1) {
       labelUrl.searchParams.set("traceIds", traceIds.join(","))
@@ -182,9 +188,12 @@ async function main() {
     console.log("Waiting for labeling to complete...")
   })
 
-  const timeoutMs = traceIds.length > 1 ? Math.max(600_000, traceIds.length * 120_000) : 600_000
+  const timeoutMs =
+    traceIds.length > 1 ? Math.max(600_000, traceIds.length * 120_000) : 600_000
   setTimeout(() => {
-    console.log(`Labeling timed out after ${Math.round(timeoutMs / 60_000)} minutes.`)
+    console.log(
+      `Labeling timed out after ${Math.round(timeoutMs / 60_000)} minutes.`,
+    )
     server.close()
     process.exit(0)
   }, timeoutMs)

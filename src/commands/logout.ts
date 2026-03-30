@@ -1,4 +1,8 @@
-import { CREDENTIALS_FILE, deleteCredentials, hasCredentials } from "../config.js"
+import {
+  CREDENTIALS_FILE,
+  deleteCredentials,
+  hasCredentials,
+} from "../config.js"
 
 function main() {
   if (!hasCredentials()) {

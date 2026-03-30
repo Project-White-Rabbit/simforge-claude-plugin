@@ -4,10 +4,7 @@ import { fileURLToPath } from "node:url"
 
 const PLUGIN_VERSION = JSON.parse(
   fs.readFileSync(
-    path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../package.json",
-    ),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../package.json"),
     "utf-8",
   ),
 ).version as string

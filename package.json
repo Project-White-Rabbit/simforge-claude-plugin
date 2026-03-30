@@ -6,7 +6,13 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "tsc": "tsc --noEmit",
+    "knip": "knip",
+    "madge": "madge --ts-config ./tsconfig.json --extensions ts --circular ./src",
+    "validate": "pnpm lint && pnpm tsc && pnpm knip && pnpm madge"
   },
   "keywords": [
     "claude-code",
@@ -20,6 +26,10 @@
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

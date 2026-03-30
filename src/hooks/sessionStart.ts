@@ -28,5 +28,7 @@ try {
 } catch {}
 
 if (messages.length > 0) {
-  process.stdout.write(JSON.stringify({ systemMessage: `\n${messages.join("\n")}` }))
+  process.stdout.write(
+    JSON.stringify({ systemMessage: `\n${messages.join("\n")}` }),
+  )
 }

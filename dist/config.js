@@ -37,17 +37,20 @@ function getApiKey() {
     return typeof creds.apiKey === "string" ? creds.apiKey : null;
 }
 function getVerbose() {
-    if (process.env.SIMFORGE_VERBOSE === "true" || process.env.SIMFORGE_VERBOSE === "1") {
+    if (process.env.SIMFORGE_VERBOSE === "true" ||
+        process.env.SIMFORGE_VERBOSE === "1") {
         return true;
     }
-    if (process.env.SIMFORGE_VERBOSE === "false" || process.env.SIMFORGE_VERBOSE === "0") {
+    if (process.env.SIMFORGE_VERBOSE === "false" ||
+        process.env.SIMFORGE_VERBOSE === "0") {
         return false;
     }
     const config = getConfigData();
     return config.verbose === true;
 }
 function getDebug() {
-    if (process.env.SIMFORGE_DEBUG === "true" || process.env.SIMFORGE_DEBUG === "1") {
+    if (process.env.SIMFORGE_DEBUG === "true" ||
+        process.env.SIMFORGE_DEBUG === "1") {
         return true;
     }
     const config = getConfigData();
@@ -76,4 +79,4 @@ export function deleteCredentials() {
 export function hasCredentials() {
     return getApiKey() !== null;
 }
-export { GLOBAL_CONFIG_DIR as CONFIG_DIR, GLOBAL_CREDENTIALS_FILE as CREDENTIALS_FILE };
+export { GLOBAL_CREDENTIALS_FILE as CREDENTIALS_FILE };

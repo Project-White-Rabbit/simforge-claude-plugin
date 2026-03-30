@@ -2,7 +2,6 @@ import { exec, execSync } from "node:child_process";
 import http from "node:http";
 import os from "node:os";
 import { getConfig, saveCredentials } from "../config.js";
-import { installMcpServer } from "../mcp.js";
 function openBrowser(url) {
     const platform = os.platform();
     const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
@@ -71,19 +70,10 @@ async function main() {
                 saveCredentials(token);
                 res.writeHead(200, { "Content-Type": "text/html" });
                 res.end(CALLBACK_HTML);
-                console.log("Authentication successful!");
-                installMcpServer(config.serviceUrl, token)
-                    .then(() => {
-                    console.log("MCP server configured — restart Claude Code to activate tools.");
-                })
-                    .catch(() => {
-                    console.log(`Could not auto-configure MCP. Run manually:\n  claude mcp add --scope user --transport http Simforge ${config.serviceUrl}/mcp --header "Authorization:Bearer <your-key>"`);
-                })
-                    .finally(() => {
-                    focusApp(previousApp);
-                    server.close();
-                    process.exit(0);
-                });
+                console.log("Authentication successful! Simforge MCP tools are now active.");
+                focusApp(previousApp);
+                server.close();
+                process.exit(0);
             }
             else {
                 res.writeHead(400, { "Content-Type": "application/json" });

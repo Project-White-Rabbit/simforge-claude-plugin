@@ -4,7 +4,7 @@ async function main() {
     const config = getConfig();
     const { current, latest, updateAvailable } = await checkForUpdate();
     console.log(`Service URL: ${config.serviceUrl}`);
-    const versionSuffix = updateAvailable && latest ? ` (${formatUpdateMessage(current, latest)})` : "";
+    const versionSuffix = updateAvailable && latest ? ` (${formatUpdateMessage(latest)})` : "";
     console.log(`Version: v${current}${versionSuffix}`);
     if (!hasCredentials()) {
         console.log("Status: not authenticated");

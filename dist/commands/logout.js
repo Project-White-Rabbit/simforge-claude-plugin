@@ -1,4 +1,4 @@
-import { CREDENTIALS_FILE, deleteCredentials, hasCredentials } from "../config.js";
+import { CREDENTIALS_FILE, deleteCredentials, hasCredentials, } from "../config.js";
 function main() {
     if (!hasCredentials()) {
         console.log("Not logged in — no credentials to remove.");

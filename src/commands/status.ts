@@ -7,7 +7,7 @@ async function main() {
 
   console.log(`Service URL: ${config.serviceUrl}`)
   const versionSuffix =
-    updateAvailable && latest ? ` (${formatUpdateMessage(current, latest)})` : ""
+    updateAvailable && latest ? ` (${formatUpdateMessage(latest)})` : ""
   console.log(`Version: v${current}${versionSuffix}`)
 
   if (!hasCredentials()) {

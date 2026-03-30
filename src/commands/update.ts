@@ -17,8 +17,12 @@ async function main() {
       stdio: "inherit",
     })
   } catch {
-    console.error("Failed to update marketplace. Is the 'simforge' marketplace registered?")
-    console.error("You can add it with: claude plugin marketplace add Project-White-Rabbit/simforge-claude-plugin")
+    console.error(
+      "Failed to update marketplace. Is the 'simforge' marketplace registered?",
+    )
+    console.error(
+      "You can add it with: claude plugin marketplace add Project-White-Rabbit/simforge-claude-plugin",
+    )
     process.exit(1)
   }
 
@@ -33,7 +37,9 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`\nSimforge plugin updated to v${latest}. Restart Claude Code to apply the update.`)
+  console.log(
+    `\nSimforge plugin updated to v${latest}. Restart Claude Code to apply the update.`,
+  )
 }
 
 main().catch((err) => {
