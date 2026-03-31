@@ -1,10 +1,12 @@
 ---
 description: Set up Bitfab tracing — authenticate, instrument, and create replay scripts
-allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write"]
+allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "AskUserQuestion"]
 argument-hint: [all|login|instrument|replay]
 ---
 
 # Bitfab Setup
+
+**Important: Always use the `AskUserQuestion` tool when asking the user questions or presenting choices.** Never just print a question as text and wait — use the tool so the user gets a real interactive prompt. This keeps the flow moving and prevents the skill from stalling.
 
 This skill handles Bitfab onboarding in three phases: **login**, **instrument**, and **replay**. Run them individually or all at once.
 
@@ -29,23 +31,25 @@ Run the status check:
 node "${CLAUDE_PLUGIN_ROOT}/dist/commands/status.js"
 ```
 
-If the output says **"not authenticated"**, run the login script:
+If the output says **"not authenticated"**, you MUST run the login script yourself — do NOT ask the user to run it manually:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/dist/commands/login.js"
 ```
 
+This script opens the user's browser for OAuth authentication and waits for the callback. It will exit automatically once the user completes login in the browser (up to 2 minutes). Run it with a 150000ms timeout.
+
 After successful login, confirm to the user and continue.
 
-### Step 2: Retrieve the API Key
+### Step 2: Verify the API Key Exists
 
-Read the stored credentials to get the API key:
+Check that credentials were saved — **NEVER print or log the API key**:
 
 ```bash
-node -e "const fs = require('fs'), os = require('os'), p = require('path').join(os.homedir(), '.config', 'bitfab', 'credentials.json'); try { console.log(JSON.parse(fs.readFileSync(p, 'utf-8')).apiKey) } catch { console.error('No credentials found') }"
+node -e "const fs = require('fs'), os = require('os'), p = require('path').join(os.homedir(), '.config', 'bitfab', 'credentials.json'); try { const k = JSON.parse(fs.readFileSync(p, 'utf-8')).apiKey; console.log(k ? 'API key found (' + k.slice(0,6) + '...)' : 'No API key') } catch { console.error('No credentials found') }"
 ```
 
-Use this key for the `BITFAB_API_KEY` environment variable.
+The API key is stored at `~/.config/bitfab/credentials.json` and read automatically by the SDK via the `BITFAB_API_KEY` environment variable.
 
 **If running `login` only**, stop here and report the result.
 
@@ -67,10 +71,12 @@ Before instrumenting, check whether Bitfab is already set up in this codebase.
    - Go: `grep -r "bitfab-go" --include="*.go"` or `client.Span` / `client.Start` calls
 3. **If instrumentation already exists:**
    - List the trace function keys and instrumented functions you found
-   - Identify any AI workflows that are NOT yet instrumented
-   - Ask the user: "I found existing Bitfab instrumentation for these trace functions: [list]. There are [N] additional AI workflows that could be instrumented: [list]. Want me to instrument any of these?"
-   - If the user says yes, proceed to the instrumentation prompt below for just the new workflows
-   - If the user says no or everything is covered, skip to the end
+   - List the trace function keys you found, then use the `AskUserQuestion` tool to ask:
+     - question: "Found instrumentation for: [list]. Want to search for more workflows?"
+     - header: "Instrument"
+     - options: "Search for more" (find uninstrumented AI workflows) / "Continue" (skip to replay setup)
+   - If "Search for more", search the codebase for all LLM calls, agent runs, and AI-driven decisions, compare against what's already traced, and present any uninstrumented workflows
+   - If "Continue", move on
 4. **If no instrumentation exists**, proceed to the full instrumentation prompt below.
 
 ### Step 2: Instrument the Codebase
@@ -138,21 +144,31 @@ Replay scripts let the team regression-test any trace function against productio
 
 For replay API details, refer to the SDK documentation for the detected language (linked in the Instrument section).
 
-### Step 1: Search for an existing replay script
+### Step 1: Gather all trace function keys
+
+First, find every trace function key in the codebase by searching for the SDK's trace function key patterns (e.g., `getFunction("key")`, `get_function("key")`, `bitfab_function "key"`, `WithFunctionName("key")`). Build a complete list — this is the source of truth for what replay must cover.
+
+### Step 2: Search for existing replay scripts
 
 - Look for files matching `scripts/replay.*`, `scripts/*replay*`, or any file that imports `bitfab.replay` / `client.replay`
 
-### Step 2: If a replay script exists
+### Step 3: If replay scripts exist
 
-- Read it and extract the trace function keys / pipelines it covers
-- Compare against all trace function keys in the codebase
-- If any keys are missing: "Your replay script covers [X, Y] but is missing [Z]. Want me to add the missing functions?"
-- If all keys are covered: report that the replay script is up to date
+- Read them and extract the trace function keys / pipelines they cover
+- **Compare against the complete list of trace function keys from Step 1**
+- If any keys are missing, use `AskUserQuestion`:
+  - question: "Replay scripts cover [X, Y] but are missing [Z]. Want me to add them?"
+  - header: "Replay"
+  - options: "Add missing" (create replay scripts for uncovered keys) / "Skip" (leave as-is)
+- If all keys are covered: report that replay scripts are up to date
 
-### Step 3: If no replay script exists
+### Step 4: If no replay script exists
 
-- Ask: "Want me to create a replay script? It lets you regression-test any trace function against production data with one command."
-- If yes, create the script. The script should:
+- Use `AskUserQuestion`:
+  - question: "No replay scripts found. Want me to create one? It lets you regression-test any trace function against production data with one command."
+  - header: "Replay"
+  - options: "Create replay script" (create a new replay script) / "Skip" (no replay script)
+- If "Create replay script", create the script. The script should:
   - Accept a pipeline name as a CLI argument
   - Accept optional `--limit N` (default 10) and `--trace-ids id1,id2` flags
   - Map pipeline names to trace function keys and their replay functions
