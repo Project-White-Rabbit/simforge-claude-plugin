@@ -67,10 +67,7 @@ function getVerbose(): boolean {
 }
 
 function getDebug(): boolean {
-  if (
-    process.env.BITFAB_DEBUG === "true" ||
-    process.env.BITFAB_DEBUG === "1"
-  ) {
+  if (process.env.BITFAB_DEBUG === "true" || process.env.BITFAB_DEBUG === "1") {
     return true
   }
   const config = getConfigData()
