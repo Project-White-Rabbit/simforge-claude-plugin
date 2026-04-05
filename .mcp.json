@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "Bitfab": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-server"
+    }
+  }
+}
