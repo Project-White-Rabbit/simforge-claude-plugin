@@ -39,7 +39,7 @@ flowchart TD
         I345["3-5. API key, install SDK,<br/>set BITFAB_API_KEY,<br/>mcp: setup_bitfab for SDK guide"] --> I6["6. Choose root span<br/>common ancestor of agent activity"]
         I6 --> I7["7. Read codebase<br/>find ALL AI workflows"]
         I7 --> I8["8. Present numbered list<br/>★ Pick exactly ONE workflow ★<br/>NEVER multiple, NEVER all"]
-        I8 --> I9["9. Read EVERY function<br/>in the trace plan"]
+        I8 --> I9["9. Read signatures the plan references<br/>skip leaves whose shape isn't in the plan"]
         I9 --> I10Build["10a. Build trace plan under<br/>★ PURELY ADDITIVE ★ constraint"]
         I10Build --> IAdd{Requires<br/>behavior change?}
         IAdd -- Yes --> IRestructure["Restructure the TREE:<br/>siblings, separate cycles,<br/>or flatter shape"]
@@ -47,10 +47,10 @@ flowchart TD
         IAdd -- No --> I10Present["10b. Present trace plan<br/>AskUserQuestion to confirm"]
         I10Present --> IConfirm{User approves?}
         IConfirm -- Adjust --> I10Build
-        IConfirm -- Approve --> I11["11. Instrument<br/>purely additive — no behavior change"]
+        IConfirm -- Approve --> I11["11. Instrument<br/>purely additive — no behavior change<br/>batch repetitive edits in parallel;<br/>>10-file fan-outs → subagent"]
         I11 --> I12["12. Tell user how to run app<br/>do NOT run yourself"]
-        I12 --> I13["13. mcp: search_traces<br/>check if traces exist for this key"]
-        I13 --> INext[/"AskUserQuestion next step:<br/>A) Generate traces (only if none)<br/>B) Instrument next workflow<br/>C) Other workflow<br/>D) Done"/]
+        I12 --> I13["★ MANDATORY STOP ★<br/>13. mcp: search_traces (only call site)<br/>empty result is expected"]
+        I13 --> INext[/"AskUserQuestion (always):<br/>A) Generate traces (only if none exist)<br/>B) Instrument next workflow<br/>C) Other workflow<br/>D) Done"/]
         INext -- A --> I8
         INext -- B --> I8
         INext -- C --> I8
@@ -72,7 +72,7 @@ flowchart TD
         RAskMissing -- Add --> R4
         RAskCreate -- Skip --> EndSkip2([Stop])
         RAskCreate -- Create --> R4
-        R4["4. Create replay script<br/>per language, --limit, --trace-ids,<br/>per-pipeline replay fns"] --> EndDone([Done])
+        R4["4. Create replay script<br/>per language, --limit, --trace-ids,<br/>per-pipeline replay fns importing actual functions<br/>(factory patterns: mock runtime context)"] --> EndDone([Done])
     end
 
     %% Styling
@@ -96,6 +96,10 @@ flowchart TD
 4. **Skill mode gates.** `login` mode stops after the Login phase. `instrument` mode stops after the Instrument loop completes. `all` mode flows through all three phases. `replay` mode jumps straight to Replay.
 
 5. **Replay coverage is computed before action.** The Replay phase always reads the current state first (existing keys + existing scripts), then takes one of three branches.
+
+6. **Replay functions call real code.** Each pipeline's replay function imports and invokes the actual instrumented function — never a stub. Factory-created functions are wrapped by calling the factory with mocks for closure dependencies (stream writers, session objects).
+
+7. **Step 13 is a mandatory AskUserQuestion stop, and the only caller of `search_traces`.** The skill never silently transitions from Instrument to Replay; an empty `search_traces` result means "offer option A," not "skip." Replay does not check for traces — scripts are created from trace function keys in code.
 
 ## Legend
 
