@@ -58,8 +58,12 @@ flowchart TD
         IAdd -- No --> I10Present["10b. Present trace plan<br/>AskUserQuestion to confirm"]
         I10Present --> IConfirm{User approves?}
         IConfirm -- Adjust --> I10Build
-        IConfirm -- Approve --> I11["11. Instrument<br/>purely additive — no behavior change<br/>batch repetitive edits in parallel;<br/>>10-file fan-outs → subagent"]
-        I11 --> I12["12. Tell user how to run app<br/>do NOT run yourself"]
+        IConfirm -- Approve --> I11Split{{"11. ★ PARALLEL GENERATION ★<br/>single message: main-agent Edits (11a) +<br/>Agent() subagent call (11b)<br/>subagent overlaps token generation,<br/>not just file writes"}}
+        I11Split --> I11Instr["11a. Instrumentation edits (main agent)<br/>purely additive — no behavior change<br/>batch repetitive edits in parallel;<br/>>10-file fan-outs → separate subagent"]
+        I11Split --> I11Replay["11b. Replay pipeline subagent<br/>Agent(subagent_type='general-purpose')<br/>self-contained brief: key, root signature,<br/>import path, existing/target script path,<br/>Replay non-negotiables, SDK #replay URL<br/>(skip entirely for Go-only projects)"]
+        I11Instr --> I12
+        I11Replay --> I12
+        I12["12. Tell user how to run app<br/>AND how to run replay once traces exist<br/>do NOT run yourself"]
         I12 --> I13["★ MANDATORY STOP ★<br/>13. mcp: search_traces (only call site)<br/>empty result is expected"]
         I13 --> INext[/"AskUserQuestion (always):<br/>A) Generate traces (only if none exist)<br/>B) Instrument next workflow<br/>C) Other workflow<br/>D) Done"/]
         INext -- A --> I8
@@ -100,9 +104,11 @@ flowchart TD
     MNext -- C --> EndModify
 
     %% ============ REPLAY PHASE ============
-    subgraph ReplayPhase["REPLAY PHASE"]
+    %% Note: most keys already have pipelines from Instrument step 11b
+    %% This phase is a coverage-verification / backfill sweep.
+    subgraph ReplayPhase["REPLAY PHASE (verify + backfill)"]
         direction TB
-        R1["1. Gather all trace function keys<br/>grep getFunction / get_function / etc."] --> R2["2. Search for existing replay scripts<br/>scripts/replay.* and SDK replay imports"]
+        R1["1. Gather all trace function keys<br/>grep getFunction / get_function / etc.<br/>(most already wired up by step 11b)"] --> R2["2. Search for existing replay scripts<br/>scripts/replay.* and SDK replay imports"]
         R2 --> RCov{Coverage}
         RCov -- "Exists,<br/>all keys covered" --> EndUpToDate([Report up to date, stop])
         RCov -- "Exists,<br/>missing keys" --> R4
@@ -121,7 +127,7 @@ flowchart TD
 
     class EndLogin,EndInstr,EndUpToDate,EndDone,EndModify,MNone,MCancel terminal
     class IAskMore,INext,RAskRefactor,I8Resolve,I8RefactorPlan,M6,M7Key,MNext question
-    class I8,I10Build,IRestructure,I11,M2,M4,M5Build,MInvalid,M8 constraint
+    class I8,I10Build,IRestructure,I11Split,I11Instr,I11Replay,M2,M4,M5Build,MInvalid,M8 constraint
 ```
 
 ## Key invariants the diagram enforces
@@ -150,25 +156,28 @@ flowchart TD
 
 10. **Serializable inputs are a trace-boundary constraint, not a replay concern.** Step 6 forbids picking a root whose inputs can't be serialized by the SDK's language-native tracing layer (TS/JSON, Python/JSON via Pydantic, Ruby/`to_json`, Go/`json.Marshal`). Live browser objects, HTTP req/res, stream writers, sockets, middleware-carrying request contexts, open file handles, and live DB connections all fail this test. Step 8 surfaces the violation as part of the workflow entry and requires the user to pick **move boundary inward** or **refactor upfront** before step 9. The Replay-phase step 5 is only a safety net; the primary gate is at instrument time, not after code has been written.
 
-11. **Refactors require a plan + second confirmation, and are labeled by flavor.** When the user picks "refactor" (or any option that modifies existing functions/call sites), the skill must first present a refactor plan labeled as **visibility** (extract + export, logic unchanged — most cases) or **structural** (new pure-core fn with serializable inputs — rare overall, common for realtime/streaming/browser apps). The plan lists source fn, extracted fn signature, trace wrap location, every rewritten call site. Then AskUserQuestion (`Apply` / `Cancel`) before touching code; Cancel returns to the originating AskUserQuestion. Does NOT apply to step 11's purely-additive instrumentation — only to paths that modify existing code.
+11. **Refactors require a plan + second confirmation, and are labeled by flavor.** When the user picks "refactor" (or any option that modifies existing functions/call sites), the skill must first present a refactor plan labeled as **visibility** (extract + export, logic unchanged — most cases) or **structural** (new pure-core fn with serializable inputs — rare overall, common for realtime/streaming/browser apps). The plan lists source fn, extracted fn signature, trace wrap location, every rewritten call site. Then AskUserQuestion (`Apply` / `Cancel`) before touching code; Cancel returns to the originating AskUserQuestion. Does NOT apply to step 11a's purely-additive instrumentation or step 11b's new-file replay pipeline writes — only to paths that modify existing code.
 
-12. **Replay is unconditional in `all` mode, and non-interactive once entered.** After Instrument step 13 option D in `all` mode, Replay always runs. Replay does not depend on traces existing — it reads trace function keys from code. Once inside Replay, there is no "Skip" branch: missing scripts get added and absent scripts get created without asking. The only Replay terminal state besides completion is "scripts exist and cover all keys, stop."
+12. **Replay is unconditional in `all` mode, and non-interactive once entered.** After Instrument step 13 option D in `all` mode, Replay always runs as a coverage-verification/backfill sweep. Replay does not depend on traces existing — it reads trace function keys from code. Once inside Replay, there is no "Skip" branch: missing scripts get added and absent scripts get created without asking. The only Replay terminal state besides completion is "scripts exist and cover all keys, stop."
 
-13. **Step 13 is a mandatory AskUserQuestion stop, and the only caller of `search_traces`.** The skill never silently transitions from Instrument to Replay; an empty `search_traces` result means "offer option A," not "skip." Replay does not check for traces — scripts are created from trace function keys in code.
+13. **Instrumentation and replay pipeline are generated concurrently via subagent delegation.** Step 11 fans out into 11a (main agent: instrumentation edits) and 11b (subagent: replay pipeline for this cycle's trace function key), dispatched in a single message. The subagent — spawned via `Agent(subagent_type="general-purpose")` with a self-contained brief (key, root signature, import path, existing/target replay script path, Replay non-negotiables, SDK `#replay` URL) — generates its code in parallel with the main agent's. This is the key shift: parallel `Edit` calls alone only overlap millisecond file writes, whereas a subagent overlaps the seconds-to-minutes of token generation. The replay subagent is skipped for Go-only projects (Go does not support replay). The trace plan's `Files changed:` list covers both halves, including the new/edited replay script path. The Replay phase therefore typically runs as a sweep that confirms everything is already wired up; it still exists to catch pre-existing trace function keys (added outside the skill or before this step was parallelized) and to verify Replay Output Contract compliance.
 
-14. **One trace function and one direction per Modify cycle.** Modify step 2 picks exactly one trace function; Modify step 4 picks exactly one of the five directions (add context / increase depth / reduce depth / move root upstream / move root downstream). Mixing directions or batching trace functions is forbidden — the user loops via the Modify step 9 menu if they want more.
+14. **Step 13 is a mandatory AskUserQuestion stop, and the only caller of `search_traces`.** The skill never silently transitions from Instrument to Replay; an empty `search_traces` result means "offer option A," not "skip." Replay does not check for traces — scripts are created from trace function keys in code.
 
-15. **Purely additive modifications.** Modify step 5 enforces the same additive constraint as Instrument step 10a: if the chosen direction would require a behavior change, the direction is rejected (the user picks a different direction or splits into multiple cycles). Removing a `withSpan`/`@span` wrapper is the only structural edit allowed, and only under direction 3 (Reduce depth), and only when the underlying call stays intact.
+15. **One trace function and one direction per Modify cycle.** Modify step 2 picks exactly one trace function; Modify step 4 picks exactly one of the five directions (add context / increase depth / reduce depth / move root upstream / move root downstream). Mixing directions or batching trace functions is forbidden — the user loops via the Modify step 9 menu if they want more.
 
-16. **Before/after diff is gated on the same additive check.** Modify step 6 is only reached after step 5 proves the direction is additive; the diff is never shown alongside a behavior-changing option.
+16. **Purely additive modifications.** Modify step 5 enforces the same additive constraint as Instrument step 10a: if the chosen direction would require a behavior change, the direction is rejected (the user picks a different direction or splits into multiple cycles). Removing a `withSpan`/`@span` wrapper is the only structural edit allowed, and only under direction 3 (Reduce depth), and only when the underlying call stays intact.
 
-17. **Key rename is an explicit user decision.** Directions 4 and 5 (root moves) always prompt for keep-or-rename at Modify step 7. Directions 1–3 never prompt — the key is preserved.
+17. **Before/after diff is gated on the same additive check.** Modify step 6 is only reached after step 5 proves the direction is additive; the diff is never shown alongside a behavior-changing option.
+
+18. **Key rename is an explicit user decision.** Directions 4 and 5 (root moves) always prompt for keep-or-rename at Modify step 7. Directions 1–3 never prompt — the key is preserved.
 
 ## Legend
 
 | Shape | Meaning |
 |---|---|
 | Rectangle | Action / step |
+| Hexagon | Parallel fan-out — the children run concurrently |
 | Diamond | Internal decision (Claude decides based on state) |
 | Parallelogram | AskUserQuestion (user decides) |
 | Stadium (rounded) | Terminal — flow stops |
