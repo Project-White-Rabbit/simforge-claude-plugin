@@ -1,4 +1,4 @@
-import { detectLegacyInstall, legacyMigrationMessage, runUpdate, } from "bitfab-plugin-lib";
+import { detectLegacyInstall, legacyMigrationMessage, parseUpdateMode, runUpdate, } from "bitfab-plugin-lib";
 import { platform } from "../platform.js";
 import { getVersion } from "../version.js";
 async function main() {
@@ -6,7 +6,8 @@ async function main() {
         console.log(legacyMigrationMessage(platform));
         return;
     }
-    await runUpdate(getVersion(), platform);
+    const mode = parseUpdateMode(process.argv[2]);
+    await runUpdate(getVersion(), platform, mode);
 }
 main().catch((err) => {
     console.error("Update failed:", err.message);

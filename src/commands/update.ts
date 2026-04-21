@@ -1,6 +1,7 @@
 import {
   detectLegacyInstall,
   legacyMigrationMessage,
+  parseUpdateMode,
   runUpdate,
 } from "bitfab-plugin-lib"
 import { platform } from "../platform.js"
@@ -12,7 +13,8 @@ async function main() {
     return
   }
 
-  await runUpdate(getVersion(), platform)
+  const mode = parseUpdateMode(process.argv[2])
+  await runUpdate(getVersion(), platform, mode)
 }
 
 main().catch((err) => {
