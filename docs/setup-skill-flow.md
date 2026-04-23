@@ -189,4 +189,4 @@ flowchart TD
 
 When `commands/setup.md` changes (steps added, removed, reordered, or branching changes), update the Mermaid block above and re-render to verify. The diagram and the skill must agree — they document the same flow.
 
-Same edits should be mirrored to `bitfab-cursor-plugin/skills/bitfab-setup/SKILL.md` per the CLAUDE.md plugin sync rule.
+Same edits should be mirrored to `bitfab-cursor-plugin/skills/bitfab-setup/SKILL.md` and `bitfab-codex-plugin/skills/setup/SKILL.md` per the CLAUDE.md plugin sync rule. The codex skill carries platform-specific extras (`BITFAB_PLUGIN_DIR` resolution, ticket-channel + browser-launch-failure rules, Blocking-process polling rule) that stay codex-only.
