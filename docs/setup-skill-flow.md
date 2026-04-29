@@ -55,10 +55,13 @@ flowchart TD
         I10Build --> IAdd{Requires<br/>behavior change?}
         IAdd -- Yes --> IRestructure["Restructure the TREE:<br/>siblings, separate cycles,<br/>or flatter shape"]
         IRestructure --> I10Build
-        IAdd -- No --> I10Present["10b. Present trace plan<br/>AskUserQuestion to confirm"]
-        I10Present --> IConfirm{User approves?}
-        IConfirm -- Adjust --> I10Build
-        IConfirm -- Approve --> I11Split{{"11. ★ PARALLEL GENERATION ★<br/>single message: main-agent Edits (11a) +<br/>Agent() subagent call (11b)<br/>subagent overlaps token generation,<br/>not just file writes"}}
+        IAdd -- No --> I10Post["10b. mcp: create_trace_plan<br/>build TracePlanTree (rootId + nodes),<br/>capturedNodeIds = recommendation,<br/>pre-populate samples per node"]
+        I10Post --> I10Open["Bash: node dist/commands/openTracePlan.js &lt;planId&gt;<br/>opens browser via loopback + ticket race;<br/>blocks (up to 30 min) until user confirms/cancels;<br/>poll the live exec session per Blocking-process rule"]
+        I10Open --> IExit{stdout on exit?}
+        IExit -- "Trace plan cancelled" --> ICancelInstr([Stop, redirect])
+        IExit -- "non-zero exit / timeout" --> ICancelInstr
+        IExit -- "Trace plan confirmed" --> I10Get["mcp: get_trace_plan(planId)<br/>read authoritative capturedNodeIds"]
+        I10Get --> I11Split{{"11. ★ PARALLEL GENERATION ★<br/>single message: main-agent Edits (11a) +<br/>Agent() subagent call (11b)<br/>subagent overlaps token generation,<br/>not just file writes<br/>(use browser-confirmed capturedNodeIds)"}}
         I11Split --> I11Instr["11a. Instrumentation edits (main agent)<br/>purely additive — no behavior change<br/>batch repetitive edits in parallel;<br/>>10-file fan-outs → separate subagent"]
         I11Split --> I11Replay["11b. Replay pipeline subagent<br/>Agent(subagent_type='general-purpose')<br/>self-contained brief: key, root signature,<br/>import path, existing/target script path,<br/>Replay non-negotiables, SDK #replay URL<br/>(skip entirely for Go-only projects)"]
         I11Instr --> I12
@@ -126,8 +129,8 @@ flowchart TD
     classDef question fill:#fae8ff,stroke:#86198f,color:#000
     classDef constraint fill:#fee2e2,stroke:#b91c1c,color:#000
 
-    class EndLogin,EndInstr,EndUpToDate,EndDone,EndModify,MNone,MCancel terminal
-    class IAskMore,INext,RAskRefactor,I8Resolve,I8RefactorPlan,M6,M7Key,MNext question
+    class EndLogin,EndInstr,EndUpToDate,EndDone,EndModify,MNone,MCancel,ICancelInstr terminal
+    class IAskMore,INext,RAskRefactor,I8Resolve,I8RefactorPlan,M6,M7Key,MNext,I10Ask question
     class I8,I10Build,IRestructure,I11Split,I11Instr,I11Replay,M2,M4,M5Build,MInvalid,M8 constraint
 ```
 
@@ -146,6 +149,8 @@ flowchart TD
 4. **Purely additive instrumentation.** Step 10a builds the trace plan under the constraint that the tree must be implementable without behavior changes. If a candidate tree requires `await`-ing a stream that wasn't awaited, delaying a call, reordering, blocking a callback, or restructuring control flow, the tree is invalid — restructure the *tree* (siblings, separate cycles, flatter shape), not the code.
 
 5. **Trace plan presentation is gated.** The trace plan is never shown until the additive check passes (10a → 10b). Behavior-changing approaches are never offered as options.
+
+5a. **Trace plan confirmation is a browser handoff, the same shape as `login.js` / `startDataset.js`.** Step 10b posts the plan via `create_trace_plan` and then runs `node dist/commands/openTracePlan.js <planId>`. That CLI opens the browser to a URL with `?callbackPort=…&ticket=…`, races a loopback HTTP callback against a server-polled handoff ticket (kind `tracePlan.confirm`), and blocks until the user clicks **Confirm** or **Chat about this**. The skill polls the live exec session per the Blocking-process rule until the process exits — `Trace plan confirmed [via …]` proceeds to `get_trace_plan` for the authoritative `capturedNodeIds`; `Trace plan cancelled [via …]` or non-zero / timeout exits the cycle without writing instrumentation. The inline format remains in the skill as a fallback for when the MCP tool errors (offline, MCP unreachable).
 
 6. **Skill mode gates.** `login` mode stops after the Login phase. `instrument` mode stops after the Instrument loop completes. `all` mode flows through login → instrument → replay (Modify is **not** part of `all`). `modify` mode jumps straight to Modify and does not auto-continue to Replay. `replay` mode jumps straight to Replay.
 
