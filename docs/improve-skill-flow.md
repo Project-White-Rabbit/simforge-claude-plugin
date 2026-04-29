@@ -3,11 +3,26 @@
 Visual reference for the six phases of the Bitfab improve skill (`commands/improve.md`).
 Edit the Mermaid block below to keep this in sync with the skill.
 
+## Entry modes
+
+The skill has three entry modes. `all` walks every phase; the two sub-modes do one focused thing each. Both sub-modes require the trace function key as the argument because they skip the function picker.
+
+| Invocation | Enters at | Stops after |
+|---|---|---|
+| `/bitfab:improve` or `/bitfab:improve all` | Phase 1 | Phase 6 |
+| `/bitfab:improve dataset <key>` | Phase 3 | Phase 3 (dataset built) |
+| `/bitfab:improve experiment <key>` | Phase 5 (rehydrate step) | Phase 6 |
+
+In `dataset` mode, Phase 1 (function picker) and Phase 2 (instrumentation/replay verification) are skipped — the agent greps the codebase for the key directly. In `experiment` mode, Phases 1–4 are skipped — Phase 5 starts with a rehydrate step that fetches the existing validated dataset and locates the code.
+
 ## Full flow
 
 ```mermaid
 flowchart TD
-    Start([User invokes /bitfab:improve traceFunctionKey]) --> ArgCheck{Arg provided?}
+    Start([User invokes /bitfab:improve [mode] [traceFunctionKey]]) --> ModeCheck{Mode?}
+    ModeCheck -- all --> ArgCheck{Arg provided?}
+    ModeCheck -- dataset --> P3Start
+    ModeCheck -- experiment --> P5Rehydrate
     ArgCheck -- Yes --> P1Use[Use provided key]
     ArgCheck -- No --> P1List
 
@@ -59,7 +74,9 @@ flowchart TD
         P3Approve -- Approve --> P3Hold["9. Hold dataset in-context<br/>(benchmark for Phase 5)"]
     end
 
-    P3Hold --> P4Step1
+    P3Hold --> P3ModeGate{Mode?}
+    P3ModeGate -- "dataset" --> EndDataset([Stop — dataset built])
+    P3ModeGate -- "all" --> P4Step1
 
     %% ============ PHASE 4 ============
     subgraph Phase4["PHASE 4 — Diagnose & Plan"]
@@ -75,6 +92,9 @@ flowchart TD
     %% ============ PHASE 5 ============
     subgraph Phase5["PHASE 5 — Iterate with Replay"]
         direction TB
+        P5Rehydrate["Rehydrate (experiment mode only):<br/>grep code for key<br/>search_traces validated:true<br/>read_traces scope:full"] --> P5RehydrateGate{≥1 validated<br/>failing label?}
+        P5RehydrateGate -- No --> EndNoDataset([Stop — recommend /bitfab:improve dataset key])
+        P5RehydrateGate -- Yes --> P5Step1
         P5Fork["Fork independent experiments<br/>to subagents via Agent tool<br/>(isolation: worktree)"] --> P5Step1[/"Step 1: AskUserQuestion<br/>explain change, get confirmation"/]
         P5Step1 --> P5Edit["Edit iteration target<br/>(prompt, code, params, BAML)"]
         P5Edit --> P5Step2["Step 2: Replay against dataset<br/>replay script --trace-ids id1,id2,..."]
@@ -97,7 +117,7 @@ flowchart TD
     classDef question fill:#fae8ff,stroke:#86198f,color:#000
     classDef constraint fill:#fee2e2,stroke:#b91c1c,color:#000
 
-    class EndStop1,EndStop2,P6End terminal
+    class EndStop1,EndStop2,EndDataset,EndNoDataset,P6End terminal
     class P1Ask,P2InstAsk,P2RepAsk,P3Step3,P3Approve,P4Plan,P5Step1,P5Step4 question
     class P3Step4,P3Gate,P4Buckets constraint
 ```
@@ -123,7 +143,9 @@ flowchart TD
 
 8. **Replan loop from Phase 5 → Phase 4.** If experiments improved nothing or introduced regressions, the loop returns to Phase 4 Step 3 (re-categorize) rather than Phase 5 Step 1 (re-run the same experiment).
 
-9. **No hallucinated function descriptions in Phase 1.** The list shown to the user uses only data returned by `list_trace_functions` (keys, trace counts, last activity). Claude never invents a description from the key name — key names are often ambiguous or misleading and guessed descriptions confuse the user. Each returned key is additionally cross-checked against the local codebase via `grep`, and each entry is marked ✅ instrumented here (with path) or ⚠️ not found in this repo so the user can see ground truth before picking.
+9. **Sub-mode focus.** `dataset` enters at Phase 3 and exits after Phase 3 — the labeled dataset is the deliverable. `experiment` enters at Phase 5's rehydrate step (which fetches the existing validated dataset and locates the code), then runs the iterate-with-replay loop through Phase 6 — no Phase 4 categorization runs. If `experiment` finds no validated failing labels, it stops and recommends running `/bitfab:improve dataset <key>` first. Sub-modes always require the trace function key as the argument because Phase 1 is skipped.
+
+10. **No hallucinated function descriptions in Phase 1.** The list shown to the user uses only data returned by `list_trace_functions` (keys, trace counts, last activity). Claude never invents a description from the key name — key names are often ambiguous or misleading and guessed descriptions confuse the user. Each returned key is additionally cross-checked against the local codebase via `grep`, and each entry is marked ✅ instrumented here (with path) or ⚠️ not found in this repo so the user can see ground truth before picking.
 
 ## Legend
 
