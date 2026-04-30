@@ -85,22 +85,27 @@ flowchart TD
         M1["1. Gather existing trace functions<br/>grep getFunction / get_function / etc."] --> MExists{Any<br/>existing keys?}
         MExists -- No --> MNone([Tell user to run<br/>/bitfab:setup instrument, stop])
         MExists -- Yes --> M2["2. ★ Pick exactly ONE trace function ★<br/>AskUserQuestion with existing keys"]
-        M2 --> M3["3. Reconstruct the current trace plan<br/>read instrumented files — 'before' state"]
-        M3 --> M4[/"4. ★ Pick exactly ONE direction ★<br/>AskUserQuestion (5 directions):<br/>1) Add context<br/>2) Increase depth<br/>3) Reduce depth<br/>4) Move root upstream<br/>5) Move root downstream"/]
-        M4 --> M5Build["5. Build modified trace plan under<br/>★ PURELY ADDITIVE ★ constraint<br/>apply direction-specific rules"]
-        M5Build --> MAdd{Requires<br/>behavior change?}
-        MAdd -- Yes --> MInvalid["Direction invalid for this tree:<br/>explain why, return to step 4<br/>(or split into multiple cycles)"]
-        MInvalid --> M4
-        MAdd -- No --> M6["6. Present BEFORE/AFTER diff<br/>AskUserQuestion:<br/>Proceed / Expand / Adjust / Cancel"]
-        M6 -- Adjust --> M5Build
-        M6 -- Cancel --> MCancel([Stop])
-        M6 -- Expand --> M6
-        M6 -- Proceed --> M7{Direction 4 or 5?<br/>(root moved)}
-        M7 -- Yes --> M7Key[/"7. AskUserQuestion:<br/>Keep key / Rename"/]
-        M7 -- No --> M8
-        M7Key --> M8["8. Apply changes — purely additive<br/>removing withSpan wrapper allowed only<br/>in direction 3; batch edits in parallel"]
-        M8 --> M9["9. Tell user how to run app<br/>do NOT run yourself"]
-        M9 --> MNext[/"★ MANDATORY STOP ★<br/>AskUserQuestion:<br/>A) Generate trace<br/>B) Modify another trace function<br/>C) Done"/]
+        M2 --> M3Bootstrap["3a. mcp: get_trace_plan(traceFunctionKey)<br/>fetch the latest confirmed plan for this key —<br/>response includes the full tree as JSON,<br/>used as the 'before' TracePlanTree"]
+        M3Bootstrap --> M3Found{Prior plan<br/>found?}
+        M3Found -- Yes --> M4Build
+        M3Found -- "No (first Modify cycle for key)" --> M3Read["3b. Code-reading fallback:<br/>read instrumented files →<br/>'before' TracePlanTree<br/>(rootId + nodes, same shape as Instrument 10b)"]
+        M3Read --> M4Build["4. Build modified trace plan ('after' tree) under<br/>★ PURELY ADDITIVE ★ constraint<br/>apply user's requested modifications<br/>(if no specific request, after = before —<br/>user will edit in the UI)<br/>reuse surviving node ids; mint new ids for adds<br/>★ Add ~10 callers above + ~10 callees below as<br/>'pure' (uncaptured) context nodes ★"]
+        M4Build --> MAdd{Requires<br/>behavior change?}
+        MAdd -- Yes --> MInvalid["Modification not implementable additively:<br/>explain which part doesn't fit,<br/>ask user to refine the request<br/>(or split into multiple cycles)"]
+        MInvalid --> M4Build
+        MAdd -- No --> M5Post["5a. mcp: create_trace_plan<br/>{ tree, capturedNodeIds, traceFunctionKey };<br/>tree includes the surrounding 'pure' context"]
+        M5Post --> M5Open["5b. Bash: node dist/commands/openTracePlan.js &lt;planId&gt;<br/>★ The UI is the user's primary surface ★<br/>opens browser via loopback + ticket race;<br/>user can toggle 'pure' nodes into the captured set<br/>or remove existing captures directly in the UI;<br/>blocks (up to 30 min) until user confirms/cancels;<br/>poll the live exec session per Blocking-process rule"]
+        M5Open --> MExit{stdout on exit?}
+        MExit -- "Trace plan confirmed" --> M5Get["mcp: get_trace_plan(planId)<br/>read authoritative capturedNodeIds;<br/>reconcile edits — drop wraps no longer captured,<br/>add wraps for newly captured nodes"]
+        MExit -- "Trace plan cancelled" --> M5Modify[/"AskUserQuestion: 'What would you like to change?'<br/>(answer feeds back into step 4)"/]
+        MExit -- "non-zero exit / timeout" --> M5Fallback[/"Inline fallback AskUserQuestion:<br/>Proceed / Expand / Modifications / Abort entirely"/]
+        M5Modify --> M4Build
+        M5Fallback -- Abort --> MCancel([Stop])
+        M5Fallback -- Modifications --> M4Build
+        M5Fallback -- Expand --> M5Fallback
+        M5Fallback -- Proceed --> M6
+        M5Get --> M6["6. Apply changes — purely additive<br/>removing withSpan wrapper is the only<br/>structural edit allowed; key from step 2<br/>is preserved (no rename); batch edits in parallel"]
+        M6 --> MNext[/"7. Tell user how to run app — do NOT run yourself<br/>★ MANDATORY STOP ★ AskUserQuestion:<br/>A) Generate trace<br/>B) Modify another trace function<br/>C) Done"/]
         MNext -- B --> M2
     end
 
@@ -130,8 +135,8 @@ flowchart TD
     classDef constraint fill:#fee2e2,stroke:#b91c1c,color:#000
 
     class EndLogin,EndInstr,EndUpToDate,EndDone,EndModify,MNone,MCancel,ICancelInstr terminal
-    class IAskMore,INext,RAskRefactor,I8Resolve,I8RefactorPlan,M6,M7Key,MNext,I10Ask question
-    class I8,I10Build,IRestructure,I11Split,I11Instr,I11Replay,M2,M4,M5Build,MInvalid,M8 constraint
+    class IAskMore,INext,RAskRefactor,I8Resolve,I8RefactorPlan,M5Fallback,M5Modify,MNext,I10Ask question
+    class I8,I10Build,IRestructure,I11Split,I11Instr,I11Replay,M2,M4Build,MInvalid,M6 constraint
 ```
 
 ## Key invariants the diagram enforces
@@ -152,6 +157,10 @@ flowchart TD
 
 5a. **Trace plan confirmation is a browser handoff, the same shape as `login.js` / `startDataset.js`.** Step 10b posts the plan via `create_trace_plan` and then runs `node dist/commands/openTracePlan.js <planId>`. That CLI opens the browser to a URL with `?callbackPort=…&ticket=…`, races a loopback HTTP callback against a server-polled handoff ticket (kind `tracePlan.confirm`), and blocks until the user clicks **Confirm** or **Chat about this**. The skill polls the live exec session per the Blocking-process rule until the process exits — `Trace plan confirmed [via …]` proceeds to `get_trace_plan` for the authoritative `capturedNodeIds`; `Trace plan cancelled [via …]` or non-zero / timeout exits the cycle without writing instrumentation. The inline format remains in the skill as a fallback for when the MCP tool errors (offline, MCP unreachable).
 
+5b. **Modify uses the trace plan UI as the primary modification surface.** Modify step 5a posts the modified plan (the `after` `TracePlanTree` built in step 4, which includes ~10 surrounding callers above the root and ~10 surrounding callees below each leaf as `pure` (uncaptured) context nodes) via `create_trace_plan` with the `traceFunctionKey` field set, and step 5b runs `openTracePlan.js` with the same blocking + polling contract as Instrument step 10b. The user can toggle the surrounding `pure` nodes into the captured set or remove existing captures directly in the UI — that's the source of truth, not an inline diff. `Trace plan confirmed` flows into `get_trace_plan` (by `planId`) to read the reconciled `capturedNodeIds` and on to step 6 (apply edits) — there is no separate key-decision step, the existing key is preserved. `Trace plan cancelled` flows into an AskUserQuestion ("what would you like to change?") whose answer feeds back into step 4 — cancel is "iterate," not "abort." Non-zero / timeout falls back to the inline AskUserQuestion (Proceed / Expand / Modifications / Abort entirely). When the user invokes Modify without naming any specific change, step 4 produces an `after` tree identical to `before` and the UI is the only place modifications happen.
+
+5c. **Modify bootstraps the `before` tree from the prior plan.** Modify step 3a calls `get_trace_plan` with `{ traceFunctionKey }` (no `planId`) to fetch the latest *confirmed* plan for the chosen key. The MCP response includes the full tree as JSON, which becomes the `before` tree directly — no code-reading needed. Step 3b is a fallback for keys with no prior confirmed plan (created outside the skill, or first Modify cycle that predates the `traceFunctionKey` column). The `traceFunctionKey` is persisted on every `create_trace_plan` call (Instrument step 10 + Modify step 6a) so the next Modify cycle can find it.
+
 6. **Skill mode gates.** `login` mode stops after the Login phase. `instrument` mode stops after the Instrument loop completes. `all` mode flows through login → instrument → replay (Modify is **not** part of `all`). `modify` mode jumps straight to Modify and does not auto-continue to Replay. `replay` mode jumps straight to Replay.
 
 7. **Replay coverage is computed before action.** The Replay phase reads the current state first (existing keys + existing scripts), then takes one of three branches: all covered → stop, missing keys → add, none exist → create. No user prompt on any branch.
@@ -170,13 +179,13 @@ flowchart TD
 
 14. **Step 13 is a mandatory AskUserQuestion stop. Option A delegates the wait to `dist/commands/waitForTrace.js`** — a Node CLI (shared via `bitfab-plugin-lib`) that polls Bitfab every 10s until the first trace lands or a ~10 min timeout fires, then prints one JSON line (`found` / `timeout` / `interrupted`) and exits. The agent invokes it with a single long-timeout `Bash` call, so no agent tokens are burned during the wait — same pattern as `login.js` / `startDataset.js`. The skill never silently transitions from Instrument to Replay; only option D exits the loop. Replay does not check for traces — scripts are created from trace function keys in code.
 
-15. **One trace function and one direction per Modify cycle.** Modify step 2 picks exactly one trace function; Modify step 4 picks exactly one of the five directions (add context / increase depth / reduce depth / move root upstream / move root downstream). Mixing directions or batching trace functions is forbidden — the user loops via the Modify step 9 menu if they want more.
+15. **One trace function per Modify cycle.** Modify step 2 picks exactly one trace function. Batching multiple trace functions is forbidden — the user loops via the Modify step 7 menu if they want more.
 
-16. **Purely additive modifications.** Modify step 5 enforces the same additive constraint as Instrument step 10a: if the chosen direction would require a behavior change, the direction is rejected (the user picks a different direction or splits into multiple cycles). Removing a `withSpan`/`@span` wrapper is the only structural edit allowed, and only under direction 3 (Reduce depth), and only when the underlying call stays intact.
+16. **Purely additive modifications.** Modify step 4 enforces the same additive constraint as Instrument step 10a: if a requested modification would require a behavior change (awaiting a stream that wasn't awaited, delaying a call, reordering, blocking a callback, restructuring control flow), it is rejected and the user is asked to refine the request (or split into multiple cycles). Removing a `withSpan`/`@span` wrapper is the only structural edit allowed, and only when the underlying call stays intact.
 
-17. **Before/after diff is gated on the same additive check.** Modify step 6 is only reached after step 5 proves the direction is additive; the diff is never shown alongside a behavior-changing option.
+17. **Trace plan UI is gated on the same additive check.** Modify step 5 (post + open the plan in the UI) is only reached after step 4 proves the modification is additive; the UI is never shown alongside a behavior-changing option.
 
-18. **Key rename is an explicit user decision.** Directions 4 and 5 (root moves) always prompt for keep-or-rename at Modify step 7. Directions 1–3 never prompt — the key is preserved.
+18. **Trace function key is preserved across Modify cycles.** Modify never renames the key — the key from step 2 carries through step 5's `create_trace_plan` and step 6's edits unchanged. Historical traces continue to aggregate under the same key, and the next Modify cycle bootstraps from the persisted plan via `get_trace_plan({ traceFunctionKey })`.
 
 ## Legend
 
