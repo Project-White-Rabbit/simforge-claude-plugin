@@ -1,14 +1,14 @@
 ---
 description: Iterate on Bitfab span-rendering templates against a live trace, with the agent editing via MCP and the user previewing in the browser
 argument-hint: "[<trace-function-key>]"
-allowed-tools: ["Bash", "Grep", "Glob", "Read", "AskUserQuestion", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__get_template_reference", "mcp__plugin_bitfab_Bitfab__get_template", "mcp__plugin_bitfab_Bitfab__update_template"]
+allowed-tools: ["Bash", "Grep", "Glob", "Read", "AskUserQuestion", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__search_traces", "mcp__plugin_bitfab_Bitfab__get_template_reference", "mcp__plugin_bitfab_Bitfab__get_template", "mcp__plugin_bitfab_Bitfab__update_template"]
 ---
 
 # Bitfab Templates
 
 Open the chromeless **template-preview** page for one trace function and iterate on the org's global span-rendering templates with the user. Each round: the user describes what should look different, you call `mcp__plugin_bitfab_Bitfab__get_template` → edit → `mcp__plugin_bitfab_Bitfab__update_template`, and the user refreshes the preview to see the change rendered against a real trace. Loop until the user is satisfied.
 
-**MCP tools:** This skill uses `list_trace_functions`, `get_template_reference`, `get_template`, and `update_template` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`); use only the `mcp__plugin_bitfab_Bitfab__*` variants.
+**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, `get_template_reference`, `get_template`, and `update_template` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`); use only the `mcp__plugin_bitfab_Bitfab__*` variants.
 
 Templates control how a span's input / output renders in the Bitfab UI. They are scoped per **span type** (`llm`, `agent`, `function`, `guardrail`, `handoff`, `custom`) and apply across the org. Editing one template affects every trace that contains a span of that type, so surface this when the user asks for a change that's narrower than "change all llm spans look like X."
 
@@ -41,7 +41,16 @@ Hold the reference in your working context for the rest of the loop. Do NOT call
 
 Before opening the preview, grep the codebase for the trace function key (`<key>`) so you can see what the function actually does. The user's "change" requests are usually about surfacing something domain-specific (an input field, a tool name, a context label), and knowing the function helps you map the request to the right span type and the right field path. If grep returns nothing (the function has been renamed or the user is operating on traces from a different repo), continue without it.
 
-## 4. Open the chromeless template-preview page (background)
+## 4. Verify a trace exists for the function
+
+The preview page renders the most recent trace for the function. Without at least one trace it has nothing to render, so check before opening it.
+
+Call `mcp__plugin_bitfab_Bitfab__search_traces` with `{ traceFunctionKey: "<key>", limit: 1 }`. If the response contains a trace ID, continue. If the response indicates no traces exist (e.g. `No traces found matching the filter criteria.`), exit and tell the user in one short line: `No traces yet for <key>. Run your app (or the replay script) to generate one, then re-run \`/bitfab:templates <key>\` to preview.` Do NOT block waiting; the user re-invokes when they have a trace.
+
+- **trace exists** — continue and open the preview
+- **no traces yet for this function** — exit and tell the user to generate a trace and re-run
+
+## 5. Open the chromeless template-preview page (background)
 
 Launch the preview command **in the background** so the agent can keep iterating while the page stays open:
 
@@ -49,11 +58,11 @@ Launch the preview command **in the background** so the agent can keep iterating
 node "${CLAUDE_PLUGIN_ROOT}/dist/commands/startTemplatePreview.js" <functionKey>
 ```
 
-Run this with `run_in_background: true` on the Bash tool. The harness returns a task id and an output file path, and will deliver a `<task-notification>` with `status: completed` automatically when the process exits. Capture both — you'll need the output file path to poll between edit rounds.
+Run this with `run_in_background: true` on the Bash tool. The harness returns a task id and an output file path, and will deliver a `<task-notification>` with `status: completed` automatically when the process exits. Capture both: you'll need the output file path to poll between edit rounds.
 
 The command **blocks until the user clicks the Close button on the page**, then exits 0 with a single line like `Template preview closed [via loopback]`. If the user instead just closes the browser tab without clicking Close, the process keeps running until the 30-minute timeout. The page auto-redirects to the most recent trace for the function and renders it with the org's current templates; the user refreshes after each edit to see the new render.
 
-## 5. Edit loop: change → render → confirm (poll for Close)
+## 6. Edit loop: change → render → confirm (poll for Close)
 
 Each round of the loop:
 
@@ -63,7 +72,7 @@ Each round of the loop:
 4. Call `mcp__plugin_bitfab_Bitfab__update_template` with the full edited body. The tool upserts the org's global override in place (no version bump, no row juggling).
 5. Tell the user "Refresh the preview to see the change," in one short line. Do not paste the template body back into chat.
 
-Before asking the user about another change, **check whether the background process from step 4 has exited**. The terminal signal is a line containing `Template preview closed` on stdout (the process exits 0 right after).
+Before asking the user about another change, **check whether the background process from step 5 has exited**. The terminal signal is a line containing `Template preview closed` on stdout (the process exits 0 right after).
 
 Two equivalent ways to detect it: (a) if you've already received a `<task-notification>` for the captured task id with `status: completed`, the user has clicked Close; (b) otherwise, use the `Read` tool on the captured output file path and look for the `Template preview closed` line. Either signal means the loop should exit.
 
