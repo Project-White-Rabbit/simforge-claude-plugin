@@ -100,10 +100,12 @@ flowchart TD
         P5RehydrateGate -- Yes --> P5Step1
         P5Fork["Fork independent experiments<br/>to subagents via Agent tool<br/>(isolation: worktree)"] --> P5Step1[/"Step 1: AskUserQuestion<br/>explain change, get confirmation"/]
         P5Step1 --> P5Edit["Edit iteration target<br/>(prompt, code, params, BAML)"]
-        P5Edit --> P5Step2["Step 2: Replay against dataset<br/>replay script --trace-ids id1,id2,...<br/>★ capture testRunId for each replay"]
-        P5Step2 --> P5Step3["Step 3: Evaluate vs labels & annotations<br/>fail: did fix address annotation?<br/>pass: did it regress?"]
-        P5Step3 --> P5StepView["Step 4: navigateStudio.js sessionId path<br/>navigates Studio to experiments page<br/>(non-blocking, parallel review)"]
-        P5StepView --> P5Step4[/"Step 5: Share results<br/>show full table, highlight best,<br/>recommend continue / replan / stop"/]
+        P5Edit --> P5Step2["Step 2: Replay against dataset<br/>replay script --trace-ids id1,id2,...<br/>★ capture testRunId for each replay<br/>★ classify items: completed / infraErrored / total"]
+        P5Step2 --> P5HealthGate{"Step 3: Check replay health<br/>(crash? all errored? high infra rate?)"}
+        P5HealthGate -- "Crash or all errored" --> P5Edit
+        P5HealthGate -- "Healthy or mixed" --> P5Step3
+        P5Step3["Step 4: Evaluate vs labels & annotations<br/>(only items with no item.error)<br/>fail: did fix address annotation?<br/>pass: did it regress?<br/>★ unreplayable is its own bucket"] --> P5StepView["Step 5: navigateStudio.js sessionId path<br/>navigates Studio to experiments page<br/>(non-blocking, parallel review)"]
+        P5StepView --> P5Step4[/"Step 6: Share results<br/>show full table + unreplayable count,<br/>highlight best, recommend continue / replan / stop"/]
         P5Step4 --> P5Outcome{Outcome}
         P5Outcome -- "Improved + no regressions:<br/>continue iterating" --> P5Step1
         P5Outcome -- "Regressions or no improvement:<br/>new experiment plan" --> P4Step3
@@ -124,7 +126,7 @@ flowchart TD
 
     class EndStop1,EndStop2,EndDataset,EndNoDataset,P5CloseStudio2,P6End terminal
     class P1Ask,P2InstAsk,P2RepAsk,P3Step3,P3Approve,P4Plan,P5Step1,P5Step4 question
-    class P3Step4,P3Gate,P4Buckets constraint
+    class P3Step4,P3Gate,P4Buckets,P5HealthGate constraint
 ```
 
 ## Key invariants the diagram enforces
@@ -153,6 +155,8 @@ flowchart TD
 10. **Studio lifecycle wraps Phase 5.** The Studio opens at the start of Phase 5 (`openStudio.js`, background) and closes at the end (`close-studio` step kills the background process). The experiment viewer in Step 4 uses `navigateStudio.js` to navigate the already-open Studio, not a new window. If the user closes the Studio early (`session-ended` event), the improve loop continues but skips navigation calls. The agent's textual summary in Step 5 is still required and is not optional.
 
 11. **No hallucinated function descriptions in Phase 1.** The list shown to the user uses only data returned by `list_trace_functions` (keys, trace counts, last activity). Claude never invents a description from the key name — key names are often ambiguous or misleading and guessed descriptions confuse the user. Each returned key is additionally cross-checked against the local codebase via `grep`, and each entry is marked ✅ instrumented here (with path) or ⚠️ not found in this repo so the user can see ground truth before picking.
+
+12. **Replay-health gate before evaluation (HARD RULE).** Phase 5 Step 3 (`check-replay-health`) runs between replay execution and evaluation. Items where `item.error` is set are unreplayable (infra failure: stale DB row, FK violation, rejected write, env mismatch) — NOT failing outputs. A whole-replay crash or an all-errored run loops back to fix the replay script; healthy/mixed runs carry the `infraErrored` count forward as its own bucket. Pass/fail is computed only over items with no `item.error`, and the unreplayable count is never folded into the pass-rate denominator.
 
 ## Legend
 
