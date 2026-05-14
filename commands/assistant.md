@@ -273,7 +273,7 @@ In `dataset` mode this phase is the entry point — Phase 1 (function picker) an
 
 ## Phase 5: Iterate with Replay
 
-Run an iterative improvement loop. If experiments are independent, fork them to subagents in parallel using the **Agent tool** with `isolation: "worktree"`; otherwise run sequentially. Each iteration:
+Run an iterative improvement loop. If experiments are independent, fork them to subagents in parallel using the **Agent tool** with `isolation: "worktree"`. Each iteration:
 
 **Studio mode:** If `studioMode` is true, the Studio is already open (launched in the `studio/open` step at the start of the flow). Use the `sessionId` captured there for all `navigateStudio.js` calls. If the Studio was closed early (`session-ended` event), skip navigation calls but continue the improve loop normally.
 **Non-Studio mode:** Skip all `navigateStudio.js` calls in this phase. Experiment results are reported in chat only.
@@ -384,7 +384,7 @@ Run an iterative improvement loop. If experiments are independent, fork them to 
 
    The command opens a browser window and exits immediately.
 
-   Continue straight to `share-results`. The viewer is a parallel review surface for the human; your textual summary in the next step is still required.
+   The user reviews the viewer alongside your `share-results` summary before deciding whether to iterate.
 7. **Run only when mode is `all` or `experiment`.**
 
    **Share results to the user.**
