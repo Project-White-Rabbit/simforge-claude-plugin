@@ -1,5 +1,5 @@
 ---
-description: Fix and experiment on code, or ask for guidance
+description: Iterate on a traced function to improve pass rates using failed traces, labeling, and replay. TRIGGER when: user wants to fix failing AI outputs, improve pass rates, debug LLM behavior, iterate on prompts, label traces, run experiments, or says anything like 'fix my AI', 'improve pass rate', 'why is this failing', 'iterate on traces', 'debug my agent', 'review traces'. SKIP when: user wants to instrument new code or set up tracing (use bitfab:setup instead).
 allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Agent", "AskUserQuestion", "Monitor", "Skill", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__search_traces", "mcp__plugin_bitfab_Bitfab__read_traces", "mcp__plugin_bitfab_Bitfab__update_agent_labels", "mcp__plugin_bitfab_Bitfab__list_datasets", "mcp__plugin_bitfab_Bitfab__create_dataset", "mcp__plugin_bitfab_Bitfab__add_traces_to_dataset", "mcp__plugin_bitfab_Bitfab__remove_traces_from_dataset"]
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: Update Bitfab plugin and SDK to the latest versions
+description: Update Bitfab plugin and SDK to the latest versions. TRIGGER when: user wants to update Bitfab, upgrade the SDK, get the latest version, or says 'update bitfab', 'upgrade SDK', 'latest version'. SKIP when: user wants to instrument code or iterate on traces.
 argument-hint: "[plugin|sdk|all]"
 allowed-tools: ["Bash", "Read", "Grep", "Glob", "Edit", "AskUserQuestion"]
 ---

@@ -1,5 +1,5 @@
 ---
-description: Set up and update the loop to improve AI features autonomously
+description: Set up Bitfab tracing to improve AI features autonomously. TRIGGER when: user wants to instrument code, add tracing, set up Bitfab, observe AI calls, add evaluation, trace LLM functions, or says anything like 'instrument', 'add tracing', 'trace my code', 'set up observability', 'hook up Bitfab', 'start tracking'. SKIP when: user is iterating on existing traced functions or debugging failures (use bitfab:assistant instead).
 argument-hint: "[<mode>] [<what to do>]"
 allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "WebFetch", "AskUserQuestion", "mcp__plugin_bitfab_Bitfab__get_bitfab_api_key", "mcp__plugin_bitfab_Bitfab__create_trace_plan", "mcp__plugin_bitfab_Bitfab__get_trace_plan", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__search_traces", "mcp__plugin_bitfab_Bitfab__get_template_reference", "mcp__plugin_bitfab_Bitfab__get_template", "mcp__plugin_bitfab_Bitfab__update_template"]
 ---
