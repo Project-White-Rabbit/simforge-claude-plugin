@@ -158,6 +158,8 @@ flowchart TD
 
 12. **Replay-health gate before evaluation (HARD RULE).** Phase 5 Step 3 (`check-replay-health`) runs between replay execution and evaluation. Items where `item.error` is set are unreplayable (infra failure: stale DB row, FK violation, rejected write, env mismatch) — NOT failing outputs. A whole-replay crash or an all-errored run loops back to fix the replay script; healthy/mixed runs carry the `infraErrored` count forward as its own bucket. Pass/fail is computed only over items with no `item.error`, and the unreplayable count is never folded into the pass-rate denominator.
 
+13. **Reactive trace-plan opening, not a flow phase.** Opening a trace plan is a cross-cutting capability of this skill, not a primitive (`/bitfab:plan` was removed). Trigger only when the user asks ("show me what's captured," "open the plan for X") or context clearly implies it. Never auto-open as part of normal phase routing — the assistant flow does not detour through plan-opening between phases. When triggered, run two sequential calls (step 2 needs the planId from step 1, so they can't be batched): `get_trace_plan({ traceFunctionKey })` returns the plan id, then `navigateStudio.js <sessionId> "/studio/trace-plan/<planId>"` (substituting that id). The plan renders in the open Studio tab in-place (Studio chrome stays mounted around the trace plan content via the `/studio/trace-plan/[id]` route, which re-uses the `TracePlanView` component from the canonical `/trace-plan/[id]` page). No new tab pops up. If no plan exists for the key, say so in one line and offer `/bitfab:setup modify <key>` to build one.
+
 ## Legend
 
 | Shape | Meaning |

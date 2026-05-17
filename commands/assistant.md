@@ -1,13 +1,13 @@
 ---
 description: Iterate on a traced function to improve pass rates using failed traces, labeling, and replay. TRIGGER when: user wants to fix failing AI outputs, improve pass rates, debug LLM behavior, iterate on prompts, label traces, run experiments, or says anything like 'fix my AI', 'improve pass rate', 'why is this failing', 'iterate on traces', 'debug my agent', 'review traces'. SKIP when: user wants to instrument new code or set up tracing (use bitfab:setup instead).
-allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Agent", "AskUserQuestion", "Monitor", "Skill", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__search_traces", "mcp__plugin_bitfab_Bitfab__read_traces", "mcp__plugin_bitfab_Bitfab__update_agent_labels", "mcp__plugin_bitfab_Bitfab__list_datasets", "mcp__plugin_bitfab_Bitfab__create_dataset", "mcp__plugin_bitfab_Bitfab__add_traces_to_dataset", "mcp__plugin_bitfab_Bitfab__remove_traces_from_dataset"]
+allowed-tools: ["Bash", "Read", "Glob", "Grep", "Edit", "Write", "Agent", "AskUserQuestion", "Monitor", "Skill", "mcp__plugin_bitfab_Bitfab__list_trace_functions", "mcp__plugin_bitfab_Bitfab__search_traces", "mcp__plugin_bitfab_Bitfab__read_traces", "mcp__plugin_bitfab_Bitfab__update_agent_labels", "mcp__plugin_bitfab_Bitfab__list_datasets", "mcp__plugin_bitfab_Bitfab__create_dataset", "mcp__plugin_bitfab_Bitfab__add_traces_to_dataset", "mcp__plugin_bitfab_Bitfab__remove_traces_from_dataset", "mcp__plugin_bitfab_Bitfab__get_trace_plan"]
 ---
 
 # Bitfab Assistant
 
 Use the local plugin MCP tools (`mcp__plugin_bitfab_Bitfab__list_trace_functions`, `mcp__plugin_bitfab_Bitfab__search_traces`, `mcp__plugin_bitfab_Bitfab__read_traces`, `mcp__plugin_bitfab_Bitfab__update_agent_labels`, `mcp__plugin_bitfab_Bitfab__list_datasets`, `mcp__plugin_bitfab_Bitfab__create_dataset`, `mcp__plugin_bitfab_Bitfab__add_traces_to_dataset`, `mcp__plugin_bitfab_Bitfab__remove_traces_from_dataset`) to find what's failing in a traced function, build a dataset of labeled traces, and iterate on the code/prompts using replay until pass rates improve.
 
-**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, `read_traces`, `update_agent_labels`, `list_datasets`, `create_dataset`, `add_traces_to_dataset`, and `remove_traces_from_dataset` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
+**MCP tools:** This skill uses `list_trace_functions`, `search_traces`, `read_traces`, `update_agent_labels`, `list_datasets`, `create_dataset`, `add_traces_to_dataset`, `remove_traces_from_dataset`, and `get_trace_plan` from the **local plugin MCP server** (bundled with this plugin). Do NOT use the remote Bitfab MCP tools (`mcp__Simforge__*` or `mcp__Bitfab__*`) — use only the `mcp__plugin_bitfab_Bitfab__*` variants.
 
 **Always use** `AskUserQuestion` **when asking questions, reporting results, or presenting choices.** Never print a question as text and wait. Rules:
 
@@ -26,6 +26,8 @@ This skill has three invocation modes. `all` walks every phase. The two sub-mode
 In sub-modes, grep the codebase for `<key>` early so labeling and experiments are grounded in the actual instrumented function (the full flow does this in Phase 2; sub-modes skip Phase 2 entirely).
 
 **Studio** is the companion browser surface for the entire assistant flow. It opens automatically at the start and stays open throughout all phases. Individual phases navigate the Studio to the relevant page (dataset review, experiment viewer, etc.).
+
+**Opening a trace plan, when asked.** Opening trace plans is part of this skill, not a separate primitive — but only do it when the user asks (or the context clearly implies it, e.g. they said "show me what's captured"). Never auto-open. When triggered, run two sequential calls (step 2 needs the planId from step 1, so they can't be batched): (1) `mcp__plugin_bitfab_Bitfab__get_trace_plan` with `{ traceFunctionKey: "<key>" }` returns the plan id, then (2) `navigateStudio.js <sessionId> "/studio/trace-plan/<planId>"` (substituting the id from step 1) routes the already-open Studio tab there in-place. The Studio chrome (header, session indicator, agent activity) stays mounted around the trace plan content — no new tab pops up. No questions, no preamble, no summary up-front. If no plan exists for the key, say so in one line and offer `/bitfab:setup modify <key>` to build one.
 
 
 ## Studio Lifecycle
